@@ -1,0 +1,942 @@
+#include <iostream>
+#include <list>
+#include <string>
+////////////////////
+
+///////////////////
+
+
+
+class figure
+{
+	friend class Composite;
+	friend class redactor;
+protected:
+	float max_x;
+	float min_x;
+	float max_y;
+	float min_y;
+	int id;
+	static int id_number;
+	int what_is_it;//// 0-composite, 1-circle , 2-rectangle
+	/*class Center
+	{
+	public:
+		float x;
+		float y;
+	};*/
+	////////////////////////
+	virtual std::list<std::pair<figure*, int>> get_into_composite(float coord_x, float coord_y, int depth) = 0;
+	////////////////////////
+public:
+	int get_id() { return id; }
+	int get_what_is_it() { return what_is_it; }
+};
+
+int figure::id_number = 0;
+
+class Circle:public figure
+{
+	friend class redactor;
+	Circle(float radius,float center_x,float center_y)
+	{
+		max_x = center_x + radius;
+		min_x = center_x - radius;
+		max_y = center_y + radius;
+		min_y = center_y - radius;
+		what_is_it = 1;
+		id = id_number++;
+	}
+	Circle(Circle& other, int mode) 
+	{	
+		this->max_x = other.max_x;
+		this->min_x = other.min_x;
+		this->max_y = other.max_y;
+		this->min_y = other.min_y;
+		this->what_is_it = other.what_is_it;
+		if (mode == 0) { id = id_number++; }
+		else { this->id = other.id; }
+	}
+	std::list<std::pair<figure*, int>> get_into_composite(float coord_x, float coord_y, int depth) { throw "get_into_composite_false Circle"; };
+
+
+};
+
+class Rectangle :public figure
+{
+	friend class redactor;
+	Rectangle(float width,float height,float center_x,float center_y)
+	{
+		max_x = center_x + width / 2;
+		min_x = center_x - width / 2;
+		max_y = center_y + height / 2;
+		min_y = center_y - height / 2;
+		what_is_it = 2;
+		id = id_number++;
+	}
+	Rectangle(Rectangle& other,int mode)
+	{
+		this->max_x = other.max_x;
+		this->min_x = other.min_x;
+		this->max_y = other.max_y;
+		this->min_y = other.min_y;
+		this->what_is_it = other.what_is_it;
+		if (mode == 0) { id = id_number++; }
+		else { this->id = other.id; }
+	}
+	std::list<std::pair<figure*, int>> get_into_composite(float coord_x, float coord_y, int depth) { throw "get_into_composite_false Rectangle"; };
+
+};
+
+class Composite:public figure
+{
+	friend class redactor;
+	friend class iterator;
+private:
+	std::list<figure*> list;
+	void find_new_coord(figure * figu) 
+	{
+		if (this->max_x < figu->max_x) { this->max_x = figu->max_x;}
+		if (this->max_y < figu->max_y) { this->max_y = figu->max_y; }
+		if (this->min_x > figu->min_x) { this->min_x = figu->min_x; }
+		if (this->min_y > figu->min_y) { this->min_y = figu->min_y; }
+	};
+	/*Composite() 
+	{
+		this->status = -1; this->what_is_it = 0;
+	}*/
+	Composite(Composite& Copy, int mode)
+	{
+		this->max_x = Copy.max_x;
+		this->min_x = Copy.min_x;
+		this->max_y = Copy.max_y;
+		this->min_y = Copy.min_y;
+		this->what_is_it = Copy.what_is_it;
+		if (mode == 0) { id = id_number++; }
+		else{this->id = Copy.id;}
+	}
+	Composite(figure* first,figure*second)
+	{
+		list.push_back(first);
+		list.push_back(second);
+		what_is_it = 0;
+		this->max_x = first->max_x;
+		this->min_x = first->min_x;
+		this->max_y = first->max_y;
+		this->min_y = first->min_y;
+		find_new_coord(second);
+		id = id_number++;
+	}
+	void add_figure(figure* first)
+	{
+		list.push_back(first);
+		find_new_coord(first);
+	}
+	std::list<std::pair<figure*, int>> get_into_composite(float coord_x, float coord_y, int depth)
+	{
+		std::list<std::pair<figure*, int>> enumaration;
+		for(auto it = list.begin();it != list.end();++it)
+		{
+			if (coord_x < (*it)->max_x && coord_x >(*it)->min_x && coord_y < (*it)->max_y && coord_y >(*it)->min_y)
+			{
+				enumaration.push_back(std::pair<figure*, int>(*it, depth));
+				if ((*it)->what_is_it == 0)
+				{
+					auto composite_dynamic_cast = dynamic_cast<Composite*>(*it);
+					std::list<std::pair<figure*, int>> temp = composite_dynamic_cast->get_into_composite(coord_x, coord_y, (depth+1));
+					enumaration.insert(enumaration.end(), temp.begin(), temp.end());
+				}
+			}
+		}
+		return enumaration;
+	}
+};
+
+
+
+
+class redactor
+{
+	friend class iterator;
+public:
+
+	class iterator
+	{
+		friend class redactor;
+	private:
+		figure* iter;
+		std::list<figure*>::iterator vec_iter;
+		std::list<figure*>* ptr_on_vec;
+		int id;
+		figure* find_id(std::list<figure*>* list)
+		{
+			for (auto it = list->begin(); it != list->end(); ++it)
+			{
+				if (id == (*it)->get_id())
+				{
+					return *it;
+				}
+				else if ((*it)->get_what_is_it() == 0)
+				{
+					auto temp = dynamic_cast<Composite*> (*it);
+					figure* maybe_return_value = find_id(&(temp->list));
+					if (maybe_return_value == nullptr) {}
+					else { return maybe_return_value; }
+				}
+			}
+			return nullptr;
+		}
+		std::list<figure*>::iterator help_with_incr(std::list<figure*>:: iterator temp_ptr_on_vec,std::list<figure*>* list)
+		{
+			if(temp_ptr_on_vec == ptr_on_vec->end())
+			{
+				Composite* Composite_find = redactor::find_composite_iterator(list, iter);
+				if (Composite_find == nullptr) { std::cout << "end of numeration"; throw std::string("incr_iter::incr-end of numeration"); }
+				iter = Composite_find;
+				ptr_on_vec = redactor::find_ptr_on_vec(iter, list);
+				vec_iter = std::find(ptr_on_vec->begin(), ptr_on_vec->end(), iter);
+				std::list<figure*>::iterator temp_vec_iter = vec_iter;
+				return help_with_incr(++temp_vec_iter,list);
+			}
+			else
+			{
+				return temp_ptr_on_vec;
+			}
+		}
+		/*std::list<figure*>::iterator help_with_decr(std::list<figure*>::iterator temp_ptr_on_vec, std::list<figure*>* list) 
+		{
+			std::list<figure*>::iterator temp = temp_ptr_on_vec;
+			if (++temp == ptr_on_vec->begin())
+			{
+				Composite* Composite_find = redactor::find_composite_iterator(list, iter);
+				if (Composite_find == nullptr) { std::cout << "end of numeration"; throw std::string("decr_iter::decr - end of numeration"); }
+				iter = Composite_find;
+				ptr_on_vec = redactor::find_ptr_on_vec(iter, list);
+				vec_iter = std::find(ptr_on_vec->begin(), ptr_on_vec->end(), iter);
+				std::list<figure*>::iterator temp_vec_iter = vec_iter;
+				return help_with_decr(--temp_vec_iter, list);
+			}
+			else
+			{
+				return temp_ptr_on_vec;
+			}
+		
+		}*/
+	public:
+		iterator(figure* first, std::list<figure*>::iterator vec_iter, std::list<figure*>* ptr_on_vec)
+		{
+			this->iter = first;
+			this->vec_iter = vec_iter;
+			this->ptr_on_vec = ptr_on_vec;
+			this->id = first->get_id();
+		}
+
+		void update_iterator(bool flg_chnged_memory_plce_rdcor, std::list<figure*>* list)
+		{
+			if (flg_chnged_memory_plce_rdcor == 1)
+			{
+				auto temp = find_id(list);
+				if (temp == nullptr) { std::cout << "this figure doesn't exist"; throw std::string("error_get_iter_doesn't_exist_figure"); }
+				else { iter = temp; ptr_on_vec = redactor::find_ptr_on_vec(temp, list); vec_iter = std::find(ptr_on_vec->begin(), ptr_on_vec->end(), temp); }
+			}
+		}
+
+		/*std::list<figure*>::iterator get_vec_iter(bool flg_chnged_memory_plce_rdcor, std::list<figure*>* list)
+		{
+			if (flg_chnged_memory_plce_rdcor == 1)
+			{
+				get_iter(flg_chnged_memory_plce_rdcor, list);
+			}
+			return vec_iter;
+		}*/
+
+		/*std::list<figure*>* get_ptr_on_vec(bool flg_chnged_memory_plce_rdcor, std::list<figure*>* list)
+		{
+			if (flg_chnged_memory_plce_rdcor == 1)
+			{
+				get_iter(flg_chnged_memory_plce_rdcor, list);
+			}
+			return ptr_on_vec;
+		}*/
+
+		iterator incr(std::list<figure*>* list)
+		{
+			if (iter->get_what_is_it() == 0)
+			{
+				auto composite = dynamic_cast<Composite*>(iter);
+				vec_iter = composite->list.begin();
+				ptr_on_vec = &(composite->list);
+				iter = *(composite->list.begin());
+			}
+			else
+			{
+				if (++vec_iter != ptr_on_vec->end())
+				{
+					iter = *vec_iter;
+				}
+				else
+				{
+					std::list<figure*>::iterator temp_vec_iter = vec_iter;
+					temp_vec_iter = help_with_incr(temp_vec_iter,list);
+					/*auto Composite_find = redactor::find_composite_iterator(list, iter);
+					if (Composite_find == nullptr) { std::cout << "end of numeration"; throw std::string("incr_iter::incr-end of numeration"); }
+					iter = Composite_find;
+					ptr_on_vec = redactor::find_ptr_on_vec(iter, list);
+					vec_iter = std::find(ptr_on_vec->begin(), ptr_on_vec->end(), iter);
+					if(++vec_iter != ptr_on_vec->end())
+					{
+						iter = *vec_iter;
+					}
+					else
+					{
+						std::cout << "end of numeration"; throw std::string("incr_iter::incr-end of numeration");
+					}*/
+					this->iter = *temp_vec_iter;
+					this->ptr_on_vec = redactor::find_ptr_on_vec(iter, list);
+					this->vec_iter = std::find(ptr_on_vec->begin(), ptr_on_vec->end(), iter);
+				}
+			}
+			this->id = iter->get_id();
+			return iterator(iter, vec_iter, ptr_on_vec);
+		}
+
+		//iterator decr(std::list<figure*>* list)
+		//{
+		//	if (vec_iter-- != ptr_on_vec->begin())
+		//	{
+		//		if ((*vec_iter)->get_what_is_it() == 0)
+		//		{
+		//			auto composite = dynamic_cast<Composite*>((*vec_iter));
+		//			vec_iter = --(composite->list.end());
+		//			ptr_on_vec = &(composite->list);
+		//			iter = *(--(composite->list.end()));
+		//		}
+		//		else {
+		//			iter = *vec_iter;
+		//		}
+		//	}
+		//	else
+		//	{
+		//		std::list<figure*>::iterator temp_vec_iter = vec_iter;
+		//		temp_vec_iter = help_with_decr(temp_vec_iter, list);
+		//		this->iter = *temp_vec_iter;
+		//		this->ptr_on_vec = redactor::find_ptr_on_vec(iter, list);
+		//		this->vec_iter = std::find(ptr_on_vec->begin(), ptr_on_vec->end(), iter);
+		//	}
+		//	this->id = iter->get_id();
+		//	return iterator(iter, vec_iter, ptr_on_vec);
+		//}
+	};
+
+
+private:
+	std::list<figure*> list;
+	class storage_copy
+	{
+	private:
+		std::list<std::list<figure*>*> copy_undo;
+		std::list<std::list<figure*>*> copy_redo;
+	public:
+
+		void make_copy_undo(redactor& copied)
+		{
+			std::list<figure*>* copy = new std::list<figure*>(make_copy_global_list(copied));
+			copy_undo.push_back(copy);
+		}
+
+		std::list<figure*>* take_undo_version(redactor& now_version)
+		{
+			std::list<figure*>* take = copy_undo.back();
+			make_copy_redo(now_version);
+			copy_undo.pop_back();
+			return take;
+		}
+
+	private:
+		void make_copy_redo(redactor& copied)
+		{
+			std::list<figure*>* copy = new std::list<figure*>(make_copy_global_list(copied));
+			copy_redo.push_back(copy);
+		}
+
+		void clear(std::list<figure*> list_del)
+		{
+				redactor::fabric(&(list_del), [](float x, float y, figure* it) {
+				delete it;
+				}, 0, 0);
+			list_del.clear();
+		}
+	public:
+
+		std::list<figure*>* take_redo_version()
+		{
+			std::list<figure*>* take = copy_redo.back();
+			copy_redo.pop_back();
+			return take;
+
+		}
+
+		void clear_redo_version()
+		{
+			for(auto it = copy_redo.begin();it!=copy_redo.end();++it)
+				{
+					clear(**it);
+				}
+			copy_redo.clear();
+		}
+		/*	~storage_copy()
+		{
+		
+		}*/
+	};
+	storage_copy storage;
+	bool flg_chnged_memory_plce_rdcor;
+	/////////////
+    static std::list<figure*>* find_ptr_on_vec(figure* find, std::list<figure*>* maybe_finded_ptr)
+	{
+		for (std::list<figure*>::iterator it = maybe_finded_ptr->begin(); it != maybe_finded_ptr->end(); ++it)
+		{
+			if (find == *it) { return maybe_finded_ptr; }
+			else 
+			{
+				if ((*it)->what_is_it == 0)
+				{
+					auto temp = find_ptr_on_vec(find, &(dynamic_cast<Composite*>(*it)->list));
+					if (temp != nullptr) { return temp; }
+					else { continue; }
+				}
+			}
+		}
+		return nullptr;
+	}
+	static Composite* find_composite_iterator(std::list<figure*>* list, figure* find)
+	{
+		for(auto it = list->begin();it!= list->end(); ++it)
+		{
+			if((*it)->what_is_it == 0)
+				{
+					auto composite = dynamic_cast<Composite*>(*it);
+					if (find_figure_in_composite(composite, find)) { return composite; }
+					else
+					{
+						Composite* temp = find_composite_iterator(&(composite->list), find);
+						if (temp == nullptr) { continue; }else{ return temp;}
+					}
+				}
+		}
+		return nullptr;
+	}
+	static bool find_figure_in_composite(Composite* composite, figure* figur)
+	{
+		for(std::list<figure*>::iterator it = composite->list.begin();it != composite->list.end(); ++it)
+		{
+			if (*it == figur) { return  true; }
+		}
+		return false;
+	}
+	iterator change_location_2(iterator &element, iterator &new_group)
+	{
+		element.update_iterator(flg_chnged_memory_plce_rdcor, &(this->list));
+		list.erase(element.vec_iter);
+		auto temp_2 = dynamic_cast<Composite*>(new_group.iter);
+		temp_2->add_figure(element.iter);
+		element.vec_iter = std::find(temp_2->list.begin(), temp_2->list.end(), element.iter);
+		element.ptr_on_vec = &temp_2->list;
+		return element;
+	}
+	static void help_to_copy_meth(Composite& copy, Composite& original, int mode)
+	{
+		for(std::list<figure*>::iterator it = original.list.begin(); it!=original.list.end();++it)
+		{
+			figure* new_figure;
+			if((*it)->what_is_it == 0)
+			{
+				new_figure = new Composite(*(dynamic_cast<Composite*>(*it)), mode);
+				auto temp_new_composite = dynamic_cast<Composite*>(new_figure);
+				help_to_copy_meth(*temp_new_composite, *(dynamic_cast<Composite*>(*it)), mode);
+			}
+			else if((*it)->what_is_it == 1)
+			{
+				  new_figure = new Circle(*(dynamic_cast<Circle*>(*it)), mode);
+			}
+		  else
+		  {
+			  new_figure = new Rectangle(*(dynamic_cast<Rectangle*>(*it)), mode);
+		}	  
+			copy.list.push_back(new_figure);
+		}
+	}
+	////void fabric(std::list<figure*>* list,void(*func)(float, float, figure*), float x, float y);
+public:
+	redactor() { flg_chnged_memory_plce_rdcor = false; }
+
+	iterator create_circle(float radius, float center_x, float center_y)
+	{
+		storage.make_copy_undo(*this);
+		storage.clear_redo_version();
+		figure* new_circle;
+		new_circle = new Circle(radius,center_x,center_y);
+		list.push_back(new_circle);
+		auto temp = std::find(list.begin(), list.end(), new_circle);
+		return iterator(new_circle,temp,&list);
+	}
+
+	iterator create_rectangle(float width, float height, float center_x, float center_y)
+	{
+		storage.make_copy_undo(*this);
+		storage.clear_redo_version();
+		figure* new_rectangle;
+		new_rectangle = new Rectangle(width, height, center_x, center_y);
+		list.push_back(new_rectangle);
+		auto temp = std::find(list.begin(), list.end(), new_rectangle);
+		return iterator(new_rectangle, temp, &list);
+	}
+
+	iterator create_group(iterator &first, iterator &second) 
+	{
+		first.update_iterator(flg_chnged_memory_plce_rdcor, &list);
+		second.update_iterator(flg_chnged_memory_plce_rdcor, &list);
+		storage.make_copy_undo(*this);
+		storage.clear_redo_version();
+		figure* new_composite;
+		new_composite = new Composite(first.iter, second.iter);
+		auto temp_new_composite = dynamic_cast<Composite*>(new_composite);
+		first.ptr_on_vec->push_back(new_composite);
+		auto temp_iter = std::find(first.ptr_on_vec->begin(), first.ptr_on_vec->end(), new_composite);
+		auto temp_ptr_on_vec = first.ptr_on_vec;
+		second.ptr_on_vec->erase(second.vec_iter);
+		first.ptr_on_vec->erase(first.vec_iter);
+		second.ptr_on_vec = &(temp_new_composite->list);
+		first.ptr_on_vec = &(temp_new_composite->list);
+		second.vec_iter = std::find(second.ptr_on_vec->begin(), second.ptr_on_vec->end(), second.iter);
+		first.vec_iter = std::find(first.ptr_on_vec->begin(), first.ptr_on_vec->end(), first.iter);
+		return iterator(new_composite,temp_iter, temp_ptr_on_vec);
+	}
+
+	iterator change_location(iterator &element,iterator &new_group)
+	{	
+		element.update_iterator(flg_chnged_memory_plce_rdcor, &list);
+		new_group.update_iterator(flg_chnged_memory_plce_rdcor, &list);
+		storage.make_copy_undo(*this);
+		storage.clear_redo_version();
+		auto temp = find_composite_iterator(&list, element.iter);
+		if (temp == nullptr) {return change_location_2(element, new_group);}
+		temp->list.erase(element.vec_iter);
+		auto temp_2 = dynamic_cast<Composite*>(new_group.iter);
+		temp_2->add_figure(element.iter);
+		element.vec_iter = std::find(temp_2->list.begin(), temp_2->list.end(), element.iter);
+		element.ptr_on_vec = &temp_2->list;
+		return element;
+	}
+
+	iterator change_location_to_root(iterator& element) 
+	{
+		element.update_iterator(flg_chnged_memory_plce_rdcor, &list);
+		storage.make_copy_undo(*this);
+		storage.clear_redo_version();
+		auto temp = find_composite_iterator(&list, element.iter);
+		if (temp == nullptr) { return element;}
+		temp->list.erase(element.vec_iter);
+		this->list.push_back(element.iter);
+		element.vec_iter = std::find(this->list.begin(), this->list.end(), element.iter);
+		element.ptr_on_vec = &(this->list);
+		return element;
+	}
+
+	iterator change_location(iterator& element)
+	{
+		element.update_iterator(flg_chnged_memory_plce_rdcor, &list);
+		storage.make_copy_undo(*this);
+		storage.clear_redo_version();
+		auto temp = find_composite_iterator(&list, element.iter);
+		if (temp == nullptr) { return element; }
+		temp->list.erase(element.vec_iter);
+		this->list.push_back(element.iter);
+		element.vec_iter = std::find(this->list.begin(), this->list.end(), element.iter);
+		element.ptr_on_vec = &(this->list);
+		return element;
+	}
+
+	iterator find_more_deapth_figure(float coord_x, float coord_y)
+	{
+	std::list<std::pair<figure*, int>> enumaration;
+	int max_depth = -1;
+	int depth = 0;
+	figure* find_figure = nullptr;
+	for(std::list<figure*>::iterator it = list.begin(); it!=list.end(); ++it)
+		{
+			if (coord_x < (*it)->max_x && coord_x >(*it)->min_x && coord_y < (*it)->max_y && coord_y >(*it)->min_y)
+			{
+				enumaration.push_back(std::pair<figure*, int>(*it, depth));
+				if ((*it)->what_is_it == 0)
+				{
+						auto composite_dynamic_cast = dynamic_cast<Composite*>(*it);
+						std::list<std::pair<figure*, int>> temp = composite_dynamic_cast->get_into_composite(coord_x, coord_y,(depth+1));
+						enumaration.insert(enumaration.end(), temp.begin(), temp.end());
+				}
+			}
+		}
+	for(auto it = enumaration.begin(); it != enumaration.end(); ++it)
+		{
+		if(it->second > max_depth)
+			{
+			find_figure = it->first;
+			max_depth = it->second;
+			}
+		}
+	if (max_depth == -1) 
+		{
+			std::cout << "no figure on this coord"; 
+			std::list<figure*>::iterator trash;
+			return iterator(nullptr, trash, nullptr);
+		}
+		else
+		{
+		auto temp = find_ptr_on_vec(find_figure, &list);
+		return iterator(find_figure, std::find(temp->begin(), temp->end(), find_figure), temp);
+		}
+	}
+
+	void print_all_figure()
+	{
+		
+		fabric_2(&(this->list), 
+			[](float x, float y, figure* it) 
+			{ 
+				{
+				if (it->what_is_it == 0)
+					{
+					std::cout << "it's new composite" << std::endl;
+					}
+				else if(it->what_is_it == 1)
+					{
+					std::cout << "It's circle" << std::endl;
+					}
+				else
+					{
+					std::cout << "It's rectangle" << std::endl;
+					}
+				std::cout << "figure" << std::endl;
+				std::cout << "max x = " << it->max_x << std::endl;
+				std::cout << "min x = " << it->min_x << std::endl;
+				std::cout << "max y = " << it->max_y << std::endl;
+				std::cout << "min y = " << it->min_y << std::endl;
+				}
+			}, 
+			0, 
+			0);
+	}
+
+	void change_place(float x,float y, iterator &it)
+	{
+		it.update_iterator(flg_chnged_memory_plce_rdcor, &list);
+		storage.make_copy_undo(*this);
+		storage.clear_redo_version();
+		it.iter->max_x = it.iter->max_x + x;
+		it.iter->min_x = it.iter->min_x + x;
+		it.iter->max_y = it.iter->max_y + y;
+		it.iter->min_y = it.iter->min_y + y;
+		if(it.iter->what_is_it == 0)
+		{
+			auto composite = dynamic_cast<Composite*>(it.iter);
+			fabric(&(composite->list),
+				[](float x, float y, figure* it)
+				{  
+					it->max_x = it->max_x + x;
+					it->min_x = it->min_x + x;
+					it->max_y = it->max_y + y;
+					it->min_y = it->min_y + y;
+				},
+				x,
+				y);
+		}
+		auto temp_list = &list;
+		Composite* temp;
+		figure* iterator;
+		iterator = it.iter;
+		while(1)
+		{
+			temp = find_composite_iterator(temp_list,iterator);///
+			///////////////
+			if(temp == nullptr)
+			{
+				break;
+			}
+			else 
+			{
+				if (x > 0 && it.iter->max_x + x > temp->max_x) { temp->max_x = it.iter->max_x + x; }
+				if (x < 0 && it.iter->min_x + x < temp->min_x) { temp->min_x = it.iter->min_x + x; }
+				if (y > 0 && it.iter->max_y + y > temp->max_y) { temp->max_y = it.iter->max_y + y; }
+				if (y < 0 && it.iter->min_y + y < temp->min_y) { temp->min_y = it.iter->min_y + y; }
+			}
+			iterator = temp;
+		}
+	}
+
+	void delete_figur(iterator &figur)
+	{
+		figur.update_iterator(flg_chnged_memory_plce_rdcor, &list);
+		storage.make_copy_undo(*this);
+		storage.clear_redo_version();
+		auto composite_with_deleting_fig = find_composite_iterator(&list, figur.iter);
+		if (composite_with_deleting_fig == nullptr) 
+		{
+			this->list.erase(figur.vec_iter);
+		}
+		else
+		{
+			composite_with_deleting_fig->list.erase(figur.vec_iter);
+		}
+		if(figur.iter->what_is_it == 0)
+		{
+			fabric(&(dynamic_cast<Composite*>(figur.iter)->list), [](float x, float y, figure* it) {
+				delete it;
+				}, 0, 0);
+		
+		}
+		delete figur.iter;
+	}
+
+	void print_about_figure(iterator figur)
+	{
+		figur.update_iterator(flg_chnged_memory_plce_rdcor, &list);;
+		std::cout << std::endl;
+		std::cout << "/////////////";
+		if (figur.iter != nullptr) 
+		{
+			if (figur.iter->what_is_it == 0)
+			{
+				std::cout << "it's new composite" << std::endl;
+			}
+			else if(figur.iter->what_is_it == 1)
+			{	
+				std::cout << "it's circle" << std::endl;
+			}
+			else
+			{
+				std::cout << "it's rectangle" << std::endl;
+			}
+			std::cout << "figure" << std::endl;
+			std::cout << "max x = " << figur.iter->max_x << std::endl;
+			std::cout << "min x = " << figur.iter->min_x << std::endl;
+			std::cout << "max y = " << figur.iter->max_y << std::endl;
+			std::cout << "min y = " << figur.iter->min_y << std::endl;
+		}
+		std::cout << "/////////////";
+		std::cout << std::endl;
+	}
+
+	iterator copy_element(iterator &figur)
+	{
+		figur.update_iterator(flg_chnged_memory_plce_rdcor, &list);
+		storage.make_copy_undo(*this);
+		storage.clear_redo_version();
+		auto temp = find_composite_iterator(&(this->list), figur.iter);
+		figure* new_composite;
+		if (figur.iter->what_is_it == 0) 
+		{
+			new_composite = new Composite(*(dynamic_cast<Composite*>(figur.iter)),0);
+			auto temp_new_composite = dynamic_cast<Composite*>(new_composite);
+			help_to_copy_meth(*temp_new_composite, *(dynamic_cast<Composite*>(figur.iter)),0);
+		}
+		else if(figur.iter->what_is_it == 1)
+		{
+			new_composite = new Circle(*(dynamic_cast<Circle*>(figur.iter)),0);
+		}
+		else
+		{
+			new_composite = new Rectangle(*(dynamic_cast<Rectangle*>(figur.iter)),0);
+		}
+		std::list<figure*>::iterator temp_vec_iter;
+		if(temp == nullptr)
+		{
+			list.push_back(new_composite);
+			temp_vec_iter = std::find(this->list.begin(), this->list.end(), new_composite);
+		}
+		else
+		{
+			temp->add_figure(new_composite);
+			temp_vec_iter = std::find(temp->list.begin(), temp->list.end(), new_composite);
+		}
+		return iterator(new_composite, temp_vec_iter, find_ptr_on_vec(new_composite, &list));
+	}
+
+	//redactor(redactor&&) = default;
+
+	iterator incr_iterator(iterator &iter)
+	{
+		iter.update_iterator(flg_chnged_memory_plce_rdcor, &list);
+		return iter.incr(&(this->list));
+	}
+
+	/*iterator decr_iterator(iterator &iteration)
+	{
+		iteration.update_iterator(flg_chnged_memory_plce_rdcor, &list);
+		return iteration.decr(&(this->list));
+	}*/
+
+	void clear()
+	{
+		fabric(&(list), [](float x, float y, figure* it) {
+			delete it;
+			}, 0, 0);
+		this->list.clear();
+	}
+
+	void undo()
+	{
+		std::list<figure*>* temp = storage.take_undo_version(*this);
+		this->clear();
+		this->list = *temp;
+		flg_chnged_memory_plce_rdcor = 1;
+	}
+
+	void redo()
+	{
+		std::list<figure*>* temp = storage.take_redo_version();
+		storage.make_copy_undo(*this);
+		this->clear();
+		this->list = *temp;
+		flg_chnged_memory_plce_rdcor = 1;
+	}
+
+	~redactor()
+	{
+		fabric(&(list), [](float x, float y, figure* it) {
+			delete it;
+			}, 0, 0);
+		this->list.clear();
+	}
+	
+	bool how_flg_chnged_memory_plce_rdcor() { return flg_chnged_memory_plce_rdcor;}
+
+	private:
+
+	static void fabric(std::list<figure*>* list, void(*func)(float x,float y,figure* it), float x, float y)
+		{
+			for(std::list<figure*>::iterator it = list->begin(); it!=list->end(); ++it)
+			{
+				if((*it)->what_is_it == 0)
+				{
+						auto composite_dynamic_cast = dynamic_cast<Composite*>(*it);
+						fabric(&(composite_dynamic_cast->list), func, x, y);
+				}
+				func(x, y, *it);
+			}
+		}
+
+	void fabric_2(std::list<figure*>* list, void(*func)(float x, float y, figure* it), float x, float y)
+	{
+		std::cout << "<-------------------->" << std::endl;
+		for (std::list<figure*>::iterator it = list->begin(); it != list->end(); ++it)
+		{
+			func(x, y, *it);
+			if ((*it)->what_is_it == 0)
+			{
+				auto composite_dynamic_cast = dynamic_cast<Composite*>(*it);
+				fabric_2(&(composite_dynamic_cast->list), func, x, y);
+			}
+		}
+		std::cout << ">--------------------<" << std::endl;
+	}
+
+	redactor(redactor& original)
+	{
+		for (std::list<figure*>::iterator it = original.list.begin(); it != original.list.end(); ++it)
+		{
+			figure* new_composite;
+			if ((*it)->what_is_it == 0)
+			{
+				new_composite = new Composite(*(dynamic_cast<Composite*>(*it)), 1);
+				auto temp_new_composite = dynamic_cast<Composite*>(new_composite);
+				help_to_copy_meth(*temp_new_composite, *(dynamic_cast<Composite*>(*it)), 1);
+				this->list.push_back(new_composite);
+			}
+			else if ((*it)->what_is_it == 1)
+			{
+				new_composite = new Circle(*(dynamic_cast<Circle*>(*it)), 1);
+				this->list.push_back(new_composite);
+			}
+			else
+			{
+				new_composite = new Rectangle(*(dynamic_cast<Rectangle*>(*it)), 1);
+				this->list.push_back(new_composite);
+			}
+		}
+	}
+
+	static std::list<figure*> make_copy_global_list(redactor& original)
+	{
+		std::list<figure*> list_return;
+		for (std::list<figure*>::iterator it = original.list.begin(); it != original.list.end(); ++it)
+		{
+			figure* new_composite;
+			if ((*it)->what_is_it == 0)
+			{
+				new_composite = new Composite(*(dynamic_cast<Composite*>(*it)), 1);
+				auto temp_new_composite = dynamic_cast<Composite*>(new_composite);
+				help_to_copy_meth(*temp_new_composite, *(dynamic_cast<Composite*>(*it)), 1);
+				list_return.push_back(new_composite);
+			}
+			else if ((*it)->what_is_it == 1)
+			{
+				new_composite = new Circle(*(dynamic_cast<Circle*>(*it)), 1);
+				list_return.push_back(new_composite);
+			}
+			else
+			{
+				new_composite = new Rectangle(*(dynamic_cast<Rectangle*>(*it)), 1);
+				list_return.push_back(new_composite);
+			}
+		}
+		return list_return;
+	}
+};
+
+
+
+
+//надо написать метод поиска указателя на вектор в котором находиться елемент
+//и надо написать функцыю обхода, при возможности совмесить ети две задачи с помощью фабрики
+
+
+
+
+
+int main()
+{
+	redactor gloabal;
+	auto circle = gloabal.create_circle(1,2,0);
+	auto rectangle = gloabal.create_rectangle(1, 2, 4, 3);
+	redactor::iterator group = gloabal.create_group(circle, rectangle);
+	gloabal.undo();
+	auto circle_2 = gloabal.create_circle(4, 3, 2);
+	auto rectangle_2 = gloabal.create_rectangle(1, 2, 3, 1);
+	auto group_2 = gloabal.create_group(circle_2, rectangle_2);
+	auto circle_2_1_ = gloabal.create_circle(1, 4, 0);
+	gloabal.change_place(4, 3, circle);
+	gloabal.undo();
+	gloabal.change_location(circle_2_1_, group_2);
+	gloabal.undo();
+	gloabal.change_location_to_root(circle_2_1_);
+	gloabal.create_circle(3, 2, 1);
+	gloabal.undo();
+	gloabal.redo();
+	gloabal.undo();
+	gloabal.redo();
+	gloabal.print_about_figure(gloabal.find_more_deapth_figure(3, 2));
+	gloabal.print_all_figure();
+	redactor::iterator copy_global = gloabal.copy_element(group_2);
+	redactor::iterator circle_3 = gloabal.create_circle(1, 2, 3);
+	redactor::iterator rectangle_3 = gloabal.create_rectangle(1, 2, 3, 4);
+	redactor::iterator rectangle_3_1_ = gloabal.create_rectangle(5, 6, 7, 8);
+	redactor::iterator group_3 = gloabal.create_group(circle_3, rectangle_3);
+	gloabal.change_location(rectangle_3_1_, group_3);
+	gloabal.change_location(group_2, group_3);
+	gloabal.copy_element(group_2);
+	gloabal.print_about_figure(gloabal.find_more_deapth_figure(0,3));
+	gloabal.print_all_figure();
+	redactor::iterator circle_last = gloabal.create_circle(2, 1, 9);
+	while(true)
+	gloabal.print_about_figure(gloabal.incr_iterator(circle));
+}
